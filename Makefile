@@ -16,7 +16,8 @@ submodules: pull
 	git submodule update
 
 update: submodules
-	(for formula in formulas/*; do FORMULA=`basename $$formula` && cd $$formula && git remote set-url --push origin git@github.com:salt-formulas/salt-formula-$$FORMULA.git && cd ../..; done)
+	# TODO: safe set-url push origin on update target
+	#(for formula in formulas/*; do FORMULA=`basename $$formula` && cd $$formula && git remote set-url --push origin git@github.com:salt-formulas/salt-formula-$$FORMULA.git && cd ../..; done)
 	mr --trust-all -j4 run git checkout master
 	mr --trust-all -j4 update
 
@@ -36,16 +37,23 @@ html:
 pdf:
 	make -C doc latexpdf
 
+PYENV_DIR=.virtualenv
 FORKED_FORMULAS_DIR=formulas
-FORMULAS=`python3 -c 'import sys; sys.path.append("scripts");from update_mrconfig import *; print(*get_org_repos(make_github_agent(), "salt-formulas"), sep="\n")'| egrep 'salt-formula-' | sed 's/salt-formula-//'`
+FORMULAS=`. $(PYENV_DIR)/bin/activate && python3 -c 'import sys; sys.path.append("scripts");from update_mrconfig import *; print(*get_org_repos(make_github_agent(), "salt-formulas"), sep="\n")'| egrep 'salt-formula-' | sed 's/salt-formula-//'`
+
+set_push:
+	(for formula in $${FORMULAS_DIR:-$(FORKED_FORMULAS_DIR)}/*; do FORMULA=`basename $$formula` && cd $$formula && git remote set-url --push origin git@github.com:salt-formulas/salt-formula-$$FORMULA.git && cd ../..; done)
 
 scripts_prerequisites:
-	pip3 install -r scripts/requirements.txt
+	@if ! which virtualenv; then echo "Please install virtualenv first";  exit 2; fi
+	@virtualenv -p python3 --no-site-packages $(PYENV_DIR)
+	@. $(PYENV_DIR)/bin/activate
+	$(PYENV_DIR)/bin/python -m pip install -r scripts/requirements.txt
 
 list: scripts_prerequisites
 	@echo $(FORMULAS)
 
-update_forks:
+update_forks: scripts_prerequisites
 	@mkdir -p $(FORKED_FORMULAS_DIR)
 	@for FORMULA in $(FORMULAS) ; do\
      test -e $(FORKED_FORMULAS_DIR)/$$FORMULA || git clone  https://github.com/salt-formulas/salt-formula-$$FORMULA.git $(FORKED_FORMULAS_DIR)/$$FORMULA;\
@@ -79,5 +87,5 @@ remote_github_add:
      if ! git remote | grep $$ID 2>&1 > /dev/null ; then\
        git remote add $$ID git://github.com/$$ID/salt-formula-$$FORMULA;\
      fi;\
-     cd - > /dev/null;\
+     d - > /dev/null;\
      done;
